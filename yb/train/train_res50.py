@@ -1,5 +1,5 @@
 """
-训练 ResNet18 on CIFAR-100
+训练 ResNet50 on CIFAR-100
 """
 import os
 import sys
@@ -9,22 +9,21 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.tensorboard import SummaryWriter
 
-# 将项目根目录加入 path，使 import 生效
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from model.Resnet import get_res18
+from model.Resnet import get_res50
 from utils import get_cifar100_dataloaders, save_checkpoint, evaluate, print_metrics
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Train ResNet18 on CIFAR-100')
+    parser = argparse.ArgumentParser(description='Train ResNet50 on CIFAR-100')
     parser.add_argument('--batch_size', type=int, default=128, help='batch size')
     parser.add_argument('--epochs', type=int, default=100, help='number of epochs')
     parser.add_argument('--lr', type=float, default=1e-3, help='learning rate')
     parser.add_argument('--weight_decay', type=float, default=5e-4, help='weight decay')
     parser.add_argument('--data_dir', type=str, default='./data', help='CIFAR-100 data directory')
-    parser.add_argument('--log_dir', type=str, default='logs/res18', help='TensorBoard log directory')
-    parser.add_argument('--ckpt_dir', type=str, default='checkpoints/res18', help='checkpoint directory')
+    parser.add_argument('--log_dir', type=str, default='logs/res50', help='TensorBoard log directory')
+    parser.add_argument('--ckpt_dir', type=str, default='checkpoints/res50', help='checkpoint directory')
     parser.add_argument('--device', type=str, default='cuda', help='device')
     parser.add_argument('--num_workers', type=int, default=2, help='dataloader num_workers')
     return parser.parse_args()
@@ -44,9 +43,8 @@ def main():
     print(f'[Data] Train: {len(train_loader.dataset)}  |  Val: {len(val_loader.dataset)}')
 
     # 模型
-    model = get_res18(pretrained=True, num_classes=100).to(device)
+    model = get_res50(pretrained=True, num_classes=100).to(device)
 
-    # 损失 & 优化器
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.SGD(model.parameters(), lr=args.lr,
                           momentum=0.9, weight_decay=args.weight_decay)
@@ -84,7 +82,7 @@ def main():
         # ---- 验证 ----
         top1, top5, precision, recall, f1 = evaluate(model, val_loader, device)
 
-        # ---- TensorBoard 记录 ----
+        # ---- TensorBoard ----
         writer.add_scalar('Loss/train', train_loss, epoch)
         writer.add_scalar('Acc/train', train_acc, epoch)
         writer.add_scalar('Acc/val_top1', top1, epoch)

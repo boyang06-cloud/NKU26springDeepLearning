@@ -1,4 +1,49 @@
-./_pycache_/
-./data/
-./checkpoints/
-./logs/
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# --- 模型权重 & Checkpoint ---
+checkpoints/
+*.pth
+*.pt
+*.pkl
+
+# --- 日志 & 运行时输出 ---
+logs/
+runs/
+wandb/
+lightning_logs/
+
+# --- 数据集 ---
+data/
+
+# --- IDE / 编辑器 ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# --- 虚拟环境 ---
+venv/
+.venv/
+env/
+.env/
+
+# --- Jupyter ---
+.ipynb_checkpoints/
+*.ipynb
+
+# --- 杂项 ---
+*.log
+*.tmp
+*.bak

@@ -1,5 +1,5 @@
 """
-训练 ResNet18 on CIFAR-100
+训练 ResNet18 on CIFAR-100 —— 支持多 GPU
 """
 import os
 import sys
@@ -9,7 +9,6 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.tensorboard import SummaryWriter
 
-# 将项目根目录加入 path，使 import 生效
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from model.Resnet import get_res18
@@ -18,7 +17,7 @@ from utils import get_cifar100_dataloaders, save_checkpoint, evaluate, print_met
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train ResNet18 on CIFAR-100')
-    parser.add_argument('--batch_size', type=int, default=128, help='batch size')
+    parser.add_argument('--batch_size', type=int, default=128, help='batch size per GPU')
     parser.add_argument('--epochs', type=int, default=100, help='number of epochs')
     parser.add_argument('--lr', type=float, default=1e-3, help='learning rate')
     parser.add_argument('--weight_decay', type=float, default=5e-4, help='weight decay')
@@ -27,26 +26,41 @@ def parse_args():
     parser.add_argument('--ckpt_dir', type=str, default='checkpoints/res18', help='checkpoint directory')
     parser.add_argument('--device', type=str, default='cuda', help='device')
     parser.add_argument('--num_workers', type=int, default=2, help='dataloader num_workers')
+    parser.add_argument('--gpu_ids', type=int, nargs='+', default=None,
+                        help='GPU indices to use, e.g. --gpu_ids 0 1 2')
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
-    device = torch.device(args.device if torch.cuda.is_available() else 'cpu')
-    print(f'[Device] {device}')
 
-    # 数据
+    # ---------- 多 GPU 设置 ----------
+    if args.gpu_ids is not None:
+        os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(map(str, args.gpu_ids))
+
+    device = torch.device(args.device if torch.cuda.is_available() else "cpu")
+    print(f"[Device] {device}")
+    if torch.cuda.is_available():
+        print(f"[GPU] Count: {torch.cuda.device_count()}, "
+              f'Visible IDs: {os.environ.get("CUDA_VISIBLE_DEVICES", "all")}')
+
+    effective_batch = args.batch_size * max(1, torch.cuda.device_count())
     train_loader, val_loader = get_cifar100_dataloaders(
-        batch_size=args.batch_size,
+        batch_size=effective_batch,
         num_workers=args.num_workers,
         data_dir=args.data_dir,
     )
-    print(f'[Data] Train: {len(train_loader.dataset)}  |  Val: {len(val_loader.dataset)}')
+    print(f"[Data] Train: {len(train_loader.dataset)}  |  Val: {len(val_loader.dataset)}  "
+          f"Effective batch: {effective_batch}")
 
-    # 模型
-    model = get_res18(pretrained=True, num_classes=100).to(device)
+    model = get_res18(pretrained=True, num_classes=100)
 
-    # 损失 & 优化器
+    if torch.cuda.device_count() > 1:
+        print(f"[MultiGPU] Wrap model with DataParallel ({torch.cuda.device_count()} GPUs)")
+        model = nn.DataParallel(model)
+
+    model = model.to(device)
+
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.SGD(model.parameters(), lr=args.lr,
                           momentum=0.9, weight_decay=args.weight_decay)
@@ -57,7 +71,6 @@ def main():
     start_epoch = 0
 
     for epoch in range(start_epoch, args.epochs):
-        # ---- 训练 ----
         model.train()
         running_loss = 0.0
         correct = 0
@@ -81,35 +94,32 @@ def main():
         train_acc = correct / total
         scheduler.step()
 
-        # ---- 验证 ----
         top1, top5, precision, recall, f1 = evaluate(model, val_loader, device)
 
-        # ---- TensorBoard 记录 ----
-        writer.add_scalar('Loss/train', train_loss, epoch)
-        writer.add_scalar('Acc/train', train_acc, epoch)
-        writer.add_scalar('Acc/val_top1', top1, epoch)
-        writer.add_scalar('Acc/val_top5', top5, epoch)
-        writer.add_scalar('Precision/val', precision, epoch)
-        writer.add_scalar('Recall/val', recall, epoch)
-        writer.add_scalar('F1/val', f1, epoch)
-        writer.add_scalar('LR', optimizer.param_groups[0]['lr'], epoch)
+        writer.add_scalar("Loss/train", train_loss, epoch)
+        writer.add_scalar("Acc/train", train_acc, epoch)
+        writer.add_scalar("Acc/val_top1", top1, epoch)
+        writer.add_scalar("Acc/val_top5", top5, epoch)
+        writer.add_scalar("Precision/val", precision, epoch)
+        writer.add_scalar("Recall/val", recall, epoch)
+        writer.add_scalar("F1/val", f1, epoch)
+        writer.add_scalar("LR", optimizer.param_groups[0]["lr"], epoch)
 
-        # ---- 打印 ----
-        print(f'\nEpoch [{epoch+1:03d}/{args.epochs:03d}]  '
-              f'Train Loss: {train_loss:.4f}  Train Acc: {train_acc:.4f}')
-        print_metrics('Val', top1, top5, precision, recall, f1)
+        print(f"\nEpoch [{epoch+1:03d}/{args.epochs:03d}]  "
+              f"Train Loss: {train_loss:.4f}  Train Acc: {train_acc:.4f}")
+        print_metrics("Val", top1, top5, precision, recall, f1)
 
-        # ---- 保存最佳模型 ----
         if top1 > best_acc:
             best_acc = top1
-            save_checkpoint(model, optimizer, epoch, best_acc,
-                            os.path.join(args.ckpt_dir, 'best_model.pth'))
-            print(f'  >>> New best model saved (Top-1: {best_acc:.4f})')
+            net = model.module if hasattr(model, "module") else model
+            save_checkpoint(net, optimizer, epoch, best_acc,
+                            os.path.join(args.ckpt_dir, "best_model.pth"))
+            print(f"  >>> New best model saved (Top-1: {best_acc:.4f})")
 
     writer.close()
-    print(f'\n===== Training Complete =====')
-    print(f'Best Top-1 Acc: {best_acc:.4f}')
+    print(f"\n===== Training Complete =====")
+    print(f"Best Top-1 Acc: {best_acc:.4f}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

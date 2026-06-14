@@ -20,3 +20,5 @@ bash train_res18.sh
 推理评估 :
 cd yb
 python infer/baseline_res18_infer.py --checkpoint checkpoints/res18/best_model.pth
+多gpu推理：
+python infer/baseline_res50_infer.py --checkpoint checkpoints/res50/best_model.pth --gpu_ids 0 1

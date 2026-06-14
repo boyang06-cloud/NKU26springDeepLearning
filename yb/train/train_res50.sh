@@ -1,10 +1,42 @@
-python train_res50.py \
-    --batch_size 128 \
-    --epochs 100 \
-    --lr 1e-3 \
-    --weight_decay 5e-4 \
-    --data_dir ../data \
-    --log_dir ../logs/res50 \
-    --ckpt_dir ../checkpoints/res50 \
-    --device cuda \
-    --num_workers 2
+#!/bin/bash
+# ResNet50 训练 —— 可通过 CUDA_VISIBLE_DEVICES 或 --gpu_ids 选择 GPU
+
+GPU_IDS="--gpu_ids 0 1" #这里 0 1 是默认的 GPU ID，根据实际情况修改
+BATCH_SIZE=128
+EPOCHS=100
+LR=1e-3
+WEIGHT_DECAY=5e-4
+DATA_DIR="../data"
+LOG_DIR="../logs/res50"
+CKPT_DIR="../checkpoints/res50"
+NUM_WORKERS=2
+
+ARGS=()
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --gpu_ids)
+            GPU_IDS="$1"
+            shift
+            while [[ $# -gt 0 && ! "$1" =~ ^-- ]]; do
+                GPU_IDS="$GPU_IDS $1"
+                shift
+            done
+            ;;
+        *)
+            ARGS+=("$1")
+            shift
+            ;;
+    esac
+done
+
+if [ -n "$CUDA_VISIBLE_DEVICES" ]; then
+    echo "[Launch] Using CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES"
+fi
+
+CMD="python train_res50.py --batch_size $BATCH_SIZE --epochs $EPOCHS --lr $LR --weight_decay $WEIGHT_DECAY --data_dir $DATA_DIR --log_dir $LOG_DIR --ckpt_dir $CKPT_DIR --num_workers $NUM_WORKERS"
+if [ -n "$GPU_IDS" ]; then
+    CMD="$CMD $GPU_IDS"
+fi
+
+echo "[Launch] $CMD"
+eval $CMD

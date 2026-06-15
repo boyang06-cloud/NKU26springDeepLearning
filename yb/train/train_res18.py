@@ -1,5 +1,5 @@
 """
-训练 ResNet18 on CIFAR-100 —— 支持多 GPU
+璁粌 ResNet18 on CIFAR-100 鈥斺€?鏀寔澶?GPU
 """
 import os
 import sys
@@ -34,7 +34,7 @@ def parse_args():
 def main():
     args = parse_args()
 
-    # ---------- 多 GPU 设置 ----------
+    # ---------- 澶?GPU 璁剧疆 ----------
     if args.gpu_ids is not None:
         os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(map(str, args.gpu_ids))
 
@@ -53,7 +53,7 @@ def main():
     print(f"[Data] Train: {len(train_loader.dataset)}  |  Val: {len(val_loader.dataset)}  "
           f"Effective batch: {effective_batch}")
 
-    model = get_res18(pretrained=True, num_classes=100)
+    model = get_res18(num_classes=100)
 
     if torch.cuda.device_count() > 1:
         print(f"[MultiGPU] Wrap model with DataParallel ({torch.cuda.device_count()} GPUs)")

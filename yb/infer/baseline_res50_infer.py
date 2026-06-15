@@ -1,6 +1,6 @@
 """
-推理评估 ResNet50 on CIFAR-100 —— 支持多 GPU
-计算指标：Top-1 Acc, Top-5 Acc, Precision, Recall, F1
+鎺ㄧ悊璇勪及 ResNet50 on CIFAR-100 鈥斺€?鏀寔澶?GPU
+璁＄畻鎸囨爣锛歍op-1 Acc, Top-5 Acc, Precision, Recall, F1
 """
 import os
 import sys
@@ -45,7 +45,7 @@ def main():
     )
     print(f"[Data] Val samples: {len(val_loader.dataset)}")
 
-    model = get_res50(pretrained=False, num_classes=100)
+    model = get_res50(num_classes=100)
     load_checkpoint(model, args.checkpoint, device)
 
     if torch.cuda.device_count() > 1:
@@ -58,7 +58,7 @@ def main():
     top1, top5, precision, recall, f1 = evaluate(model, val_loader, device)
 
     print("\n" + "=" * 50)
-    print("  ResNet50 — CIFAR-100 推理结果")
+    print("  ResNet50 鈥?CIFAR-100 鎺ㄧ悊缁撴灉")
     print("=" * 50)
     print_metrics("Test", top1, top5, precision, recall, f1)
     print("=" * 50)

@@ -1,5 +1,5 @@
 """
-训练 ResNet50 on CIFAR-100 —— 支持多 GPU
+璁粌 ResNet50 on CIFAR-100 鈥斺€?鏀寔澶?GPU
 """
 import os
 import sys
@@ -52,7 +52,7 @@ def main():
     print(f"[Data] Train: {len(train_loader.dataset)}  |  Val: {len(val_loader.dataset)}  "
           f"Effective batch: {effective_batch}")
 
-    model = get_res50(pretrained=True, num_classes=100)
+    model = get_res50(num_classes=100)
 
     if torch.cuda.device_count() > 1:
         print(f"[MultiGPU] Wrap model with DataParallel ({torch.cuda.device_count()} GPUs)")

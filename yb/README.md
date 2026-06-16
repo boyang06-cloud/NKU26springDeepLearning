@@ -42,5 +42,10 @@ bash train_conv2former_cifar100.sh big 0 1    # big, 双卡
 ```
 推理评估：
 ```bash
-python conv2former_cifar100_infer.py --model small --checkpoint checkpoints/conv2former_small/best_model.pth
+python conv2former_cifar100_infer.py --model small --checkpoint ../train/checkpoints/conv2former_small/best_model.pth
+```
+
+## 监视训练metrics
+```bash
+tensorboard --logdir logs/conv2former_{model}
 ```

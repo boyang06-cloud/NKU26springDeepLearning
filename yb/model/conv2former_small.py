@@ -8,11 +8,12 @@ from timm.models.vision_transformer import _cfg
 
 
 class MLP(nn.Module):
-    def __init__(self, dim, mlp_ratio=4):
+    def __init__(self, dim, mlp_ratio=4, use_dw=True):
         super().__init__()
         self.norm = LayerNorm(dim, eps=1e-6, data_format="channels_first")
         self.fc1 = nn.Conv2d(dim, dim * mlp_ratio, 1)
-        self.pos = nn.Conv2d(dim * mlp_ratio, dim * mlp_ratio, 3, padding=1, groups=dim * mlp_ratio)
+        groups = dim * mlp_ratio if use_dw else 1
+        self.pos = nn.Conv2d(dim * mlp_ratio, dim * mlp_ratio, 3, padding=1, groups=groups)
         self.fc2 = nn.Conv2d(dim * mlp_ratio, dim, 1)
         self.act = nn.GELU()
 
@@ -45,11 +46,11 @@ class SpatialAttention(nn.Module):
 
 
 class Block(nn.Module):
-    def __init__(self, index, dim, kernel_size, num_head, window_size=14, mlp_ratio=4., drop_path=0.):
+    def __init__(self, index, dim, kernel_size, num_head, window_size=14, mlp_ratio=4., drop_path=0., use_dw=True):
         super().__init__()
         self.attn = SpatialAttention(dim, kernel_size)
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
-        self.mlp = MLP(dim, mlp_ratio)
+        self.mlp = MLP(dim, mlp_ratio, use_dw=use_dw)
         self.layer_scale_1 = nn.Parameter(1e-6 * torch.ones((dim)), requires_grad=True)
         self.layer_scale_2 = nn.Parameter(1e-6 * torch.ones((dim)), requires_grad=True)
 
@@ -85,7 +86,7 @@ class Conv2Former(nn.Module):
     def __init__(self, kernel_size=None, kernel_sizes=None, img_size=224, in_chans=3, num_classes=1000,
                  depths=None, dims=None, window_sizes=None,
                  mlp_ratios=None, num_heads=None,
-                 drop_path_rate=0., head_dim=1280):
+                 drop_path_rate=0., head_dim=1280, mlp_use_dw=None):
         super().__init__()
         if depths is None:
             depths = [3, 3, 9, 3]
@@ -101,6 +102,10 @@ class Conv2Former(nn.Module):
         self.num_classes = num_classes
         self.depths = depths
         self.num_stages = len(dims)
+
+        if mlp_use_dw is None:
+            mlp_use_dw = [True] * self.num_stages
+        assert len(mlp_use_dw) == self.num_stages, f"mlp_use_dw length {len(mlp_use_dw)} != num_stages {self.num_stages}" 
 
         if kernel_sizes is None:
             k = kernel_size if kernel_size is not None else 7
@@ -139,7 +144,8 @@ class Conv2Former(nn.Module):
             stage = nn.Sequential(*[
                 Block(index=cur + j, dim=dims[i], kernel_size=kernel_sizes[i],
                       drop_path=dp_rates[cur + j], num_head=num_heads[i],
-                      window_size=window_sizes[i], mlp_ratio=mlp_ratios[i])
+                      window_size=window_sizes[i], mlp_ratio=mlp_ratios[i],
+                      use_dw=mlp_use_dw[i])
                 for j in range(depths[i])
             ])
             self.stages.append(stage)
@@ -173,70 +179,42 @@ class Conv2Former(nn.Module):
         return self.pred(self.forward_features(x))
 
 
-@register_model
-def conv2former_n(pretrained=False, **kwargs):
-    model = Conv2Former(kernel_size=7, dims=[64, 128, 256, 512], depths=[2, 2, 8, 2], **kwargs)
-    model.default_cfg = _cfg()
-    return model
 
-@register_model
-def conv2former_t(pretrained=False, **kwargs):
-    model = Conv2Former(kernel_size=11, dims=[72, 144, 288, 576], depths=[3, 3, 12, 3], **kwargs)
-    model.default_cfg = _cfg()
-    return model
-
-@register_model
-def conv2former_s(pretrained=False, **kwargs):
-    model = Conv2Former(kernel_size=11, dims=[72, 144, 288, 576], depths=[4, 4, 32, 4], **kwargs)
-    model.default_cfg = _cfg()
-    return model
-
-@register_model
-def conv2former_b(pretrained=False, **kwargs):
-    model = Conv2Former(kernel_size=11, dims=[96, 192, 384, 768], depths=[4, 4, 34, 4], **kwargs)
-    model.default_cfg = _cfg()
-    return model
-
-@register_model
-def conv2former_b_22k(pretrained=False, **kwargs):
-    model = Conv2Former(kernel_size=7, dims=[96, 192, 384, 768], depths=[4, 4, 34, 4], **kwargs)
-    model.default_cfg = _cfg()
-    return model
-
-@register_model
-def conv2former_l(pretrained=False, **kwargs):
-    model = Conv2Former(kernel_size=11, dims=[128, 256, 512, 1024], depths=[4, 4, 48, 4], **kwargs)
-    model.default_cfg = _cfg()
-    return model
 
 # --- CIFAR-100 variants ---
 
 @register_model
 def conv2former_cifar100_t(pretrained=False, **kwargs):
+    drop_path_rate = kwargs.pop('drop_path_rate', 0.05)
     model = Conv2Former(
         kernel_sizes=[5, 5, 3, 3], img_size=28, num_classes=100,
-        dims=[40, 80, 160, 320], mlp_ratios=[3, 3, 3, 3],
+        dims=[40, 80, 160, 320], mlp_ratios=[2, 2, 3, 3],
         depths=[1, 2, 4, 2], num_heads=[2, 4, 8, 16],
-        window_sizes=[14, 14, 7, 4], drop_path_rate=0.05, head_dim=256, **kwargs)
+        mlp_use_dw=[False, False, True, True],
+        window_sizes=[14, 14, 7, 4], drop_path_rate=drop_path_rate, head_dim=256, **kwargs)
     model.default_cfg = _cfg()
     return model
 
 @register_model
 def conv2former_cifar100_s(pretrained=False, **kwargs):
+    drop_path_rate = kwargs.pop('drop_path_rate', 0.1)
     model = Conv2Former(
         kernel_sizes=[5, 5, 3, 3], img_size=28, num_classes=100,
-        dims=[48, 96, 192, 384], mlp_ratios=[4, 4, 4, 4],
+        dims=[48, 96, 192, 384], mlp_ratios=[2, 2, 4, 4],
         depths=[2, 2, 6, 2], num_heads=[3, 6, 12, 24],
-        window_sizes=[14, 14, 7, 4], drop_path_rate=0.1, head_dim=512, **kwargs)
+        mlp_use_dw=[False, False, True, True],
+        window_sizes=[14, 14, 7, 4], drop_path_rate=drop_path_rate, head_dim=512, **kwargs)
     model.default_cfg = _cfg()
     return model
 
 @register_model
 def conv2former_cifar100_b(pretrained=False, **kwargs):
+    drop_path_rate = kwargs.pop('drop_path_rate', 0.15)
     model = Conv2Former(
         kernel_sizes=[7, 5, 3, 3], img_size=28, num_classes=100,
-        dims=[64, 128, 256, 512], mlp_ratios=[4, 4, 4, 4],
+        dims=[64, 128, 256, 512], mlp_ratios=[2, 2, 4, 4],
         depths=[2, 3, 8, 2], num_heads=[4, 8, 16, 32],
-        window_sizes=[14, 14, 7, 4], drop_path_rate=0.15, head_dim=768, **kwargs)
+        mlp_use_dw=[False, False, True, True],
+        window_sizes=[14, 14, 7, 4], drop_path_rate=drop_path_rate, head_dim=768, **kwargs)
     model.default_cfg = _cfg()
     return model

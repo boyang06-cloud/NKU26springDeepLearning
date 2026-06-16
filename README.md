@@ -83,7 +83,10 @@ bash yb/train/train_conv2former_cifar100.sh big 0 1    # big, 双卡
 ```bash
 python -m yb.train.train_conv2former_raw
 ```
-
+### 训练消融模型
+```
+python -m yb.train.train_conv2former_ablation --epochs 100 --batch_size 128 --gpu_ids 0 1 2 3
+```
 ### 推理评估
 
 ```bash
